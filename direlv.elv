@@ -48,7 +48,7 @@ fn get-or-create-allow-dir {
   put $allow-dir
 }
 
-fn get-paths { |&dir=$nil|
+fn get-context { |&dir=$nil|
   var module-path = (path:join (or $dir '.') 'activate.elv')
 
   if (not (os:exists $module-path)) {
@@ -76,20 +76,20 @@ fn is-allowed { |p|
 
 # allow `dir`, defaulting to current directory
 fn allow { |&dir=$nil|
-  var p = (get-paths &dir=$dir)
-  fail-if-no-module $p
+  var cx = (get-context &dir=$dir)
+  fail-if-no-module $cx
 
-  echo $p[module] >$p[allow]
+  echo $cx[module] >$cx[allow]
 }
 
 # revoke `dir`, defaulting to current directory
 fn revoke { |&dir=$nil|
-  var p = (get-paths &dir=$dir)
-  fail-if-no-module $p
+  var cx = (get-context &dir=$dir)
+  fail-if-no-module $cx
 
   # allow-path not existing is harmless
   try {
-    os:remove $p[allow]
+    os:remove $cx[allow]
   } catch e {
     if (not-eq $e os:-is-not-exist) {
       fail $e
@@ -97,47 +97,47 @@ fn revoke { |&dir=$nil|
   }
 }
 
-fn activate { |&dir=$nil &p=$nil|
-  if (eq $p $nil) {
-    set p = (get-paths &dir=$dir)
+fn activate { |&dir=$nil &cx=$nil|
+  if (eq $cx $nil) {
+    set cx = (get-context &dir=$dir)
   }
-  fail-if-no-module $p
+  fail-if-no-module $cx
 
-  if (not (is-allowed $p)) {
-    echo >&2 $p[module]' is blocked. Run `direlv:allow` to approve its content'
-  } elif (has-key $exports $p[hash]) {
-    echo >&2 $p[module]' is already activated'
+  if (not (is-allowed $cx)) {
+    echo >&2 $cx[module]' is blocked. Run `direlv:allow` to approve its content'
+  } elif (has-key $exports $cx[hash]) {
+    echo >&2 $cx[module]' is already activated'
   } else {
-    set activation-stack = (conj [$p[dir]] $@activation-stack)
+    set activation-stack = (conj [$cx[dir]] $@activation-stack)
 
     eval &on-end={ |ns|
       var exported-names = (keys $ns[export] | put [(all)])
-      echo >&2 'loading: '(str:join ' ' $exported-names)' for '$p[module]
+      echo >&2 'loading: '(str:join ' ' $exported-names)' for '$cx[module]
       edit:add-vars $ns[export]
-      set exports = (assoc $exports $p[hash] $exported-names)
+      set exports = (assoc $exports $cx[hash] $exported-names)
     } (slurp <./activate.elv)
   }
 }
 
 # deactivate and (TODO) restore the most recently overwritten variables
 fn deactivate { |&dir=$nil|
-  var p = (get-paths &dir=$dir)
-  fail-if-no-module $p
+  var cx = (get-context &dir=$dir)
+  fail-if-no-module $cx
 
-  if (not (has-key $exports $p[hash])) {
-    fail $p[module]' is not activated'
+  if (not (has-key $exports $cx[hash])) {
+    fail $cx[module]' is not activated'
   }
 
-  if (not-eq $activation-stack[0] $p[dir]) {
-    fail $p[module]' is not top of the activation stack'
+  if (not-eq $activation-stack[0] $cx[dir]) {
+    fail $cx[module]' is not top of the activation stack'
   }
 
   set activation-stack = $activation-stack[1..]
 
-  var exported-names = $exports[$p[hash]]
-  echo >&2 'unloading: '(str:join ' ' $exported-names)' for '$p[module]
+  var exported-names = $exports[$cx[hash]]
+  echo >&2 'unloading: '(str:join ' ' $exported-names)' for '$cx[module]
   edit:del-vars $exported-names
-  set exports = (dissoc $exports $p[hash])
+  set exports = (dissoc $exports $cx[hash])
 }
 
 fn is-ancestor { |ancestor descendant|
@@ -151,9 +151,9 @@ fn activate-after-ancestors { |dir|
       activate-after-ancestors $parent
     }
 
-    var p = (get-paths &dir=$dir)
-    if (has-key $p module) {
-      activate &p=$p
+    var cx = (get-context &dir=$dir)
+    if (has-key $cx module) {
+      activate &cx=$cx
     }
   }
 }
