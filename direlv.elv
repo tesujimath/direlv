@@ -43,16 +43,18 @@ fn get-or-create-allow-dir {
 }
 
 fn get-paths { |&dir=$nil|
-  var module-path = (path:join (or $dir '.') '.elvrc')
+  var module-path = (path:join (or $dir '.') 'activate.elv')
 
   if (not (os:exists $module-path)) {
-    fail 'direlv: error .elvrc not found'
+    fail 'direlv: error activate.elv not found'
   }
 
   var canonical-module-path = (canonical $module-path)
-  var allow-path = (path:join (get-or-create-allow-dir) (hash $canonical-module-path))
+  var canonical-module-path-hash = (hash $canonical-module-path)
+  var namespace = (hash-abbrev $canonical-module-path-hash)
+  var allow-path = (path:join (get-or-create-allow-dir) $canonical-module-path-hash)
 
-  put [&module=$canonical-module-path &allow=$allow-path]
+  put [&module=$canonical-module-path &allow=$allow-path &namespace=$namespace]
 }
 
 
@@ -85,8 +87,11 @@ fn revoke { |&dir=$nil|
 fn activate {
   var p = (get-paths)
   if (not (is-allowed $p)) {
-    fail $p[module]' is blocked. Run `direlv allow` to approve its content'
+    fail $p[module]' is blocked. Run `direlv:allow` to approve its content'
   }
 
-  echo >&2 "warning: activation not yet implemented"
+  eval &on-end={ |ns|
+    echo >&2 'loading: '(keys $ns[export] | str:join ' ')
+    edit:add-vars $ns[export]
+  } (slurp <./activate.elv)
 }
