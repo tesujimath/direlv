@@ -7,8 +7,10 @@ use str
 # indexed by hash of activation
 var exports = [&]
 
-# indexed by variable name (TODO)
-var activation-stack = [&]
+# list of slash-terminated directories in reverse activation order (children before parents)
+var activation-stack = []
+
+var cwd
 
 # emit hook suitable for inclusion in rc.elv
 fn hook {
@@ -50,16 +52,22 @@ fn get-paths { |&dir=$nil|
   var module-path = (path:join (or $dir '.') 'activate.elv')
 
   if (not (os:exists $module-path)) {
-    fail 'direlv: error activate.elv not found'
+    put [&dir=(or $dir '.')]
+  } else {
+    var canonical-module-path = (canonical $module-path)
+    var canonical-module-path-hash = (hash $canonical-module-path)
+    var canonical-module-dir = (path:dir $canonical-module-path)
+    var allow-path = (path:join (get-or-create-allow-dir) $canonical-module-path-hash)
+
+    put [&dir=$canonical-module-dir &module=$canonical-module-path &allow=$allow-path &hash=$canonical-module-path-hash]
   }
-
-  var canonical-module-path = (canonical $module-path)
-  var canonical-module-path-hash = (hash $canonical-module-path)
-  var allow-path = (path:join (get-or-create-allow-dir) $canonical-module-path-hash)
-
-  put [&module=$canonical-module-path &allow=$allow-path &hash=$canonical-module-path-hash]
 }
 
+fn fail-if-no-module { |p|
+  if (not (has-key $p module)) {
+    fail 'direlv: error activate.elv not found in '$p[dir]
+  }
+}
 
 # is `p` allowed, defaulting to current directory
 fn is-allowed { |p|
@@ -69,6 +77,7 @@ fn is-allowed { |p|
 # allow `dir`, defaulting to current directory
 fn allow { |&dir=$nil|
   var p = (get-paths &dir=$dir)
+  fail-if-no-module $p
 
   echo $p[module] >$p[allow]
 }
@@ -76,6 +85,7 @@ fn allow { |&dir=$nil|
 # revoke `dir`, defaulting to current directory
 fn revoke { |&dir=$nil|
   var p = (get-paths &dir=$dir)
+  fail-if-no-module $p
 
   # allow-path not existing is harmless
   try {
@@ -87,32 +97,81 @@ fn revoke { |&dir=$nil|
   }
 }
 
-fn activate {
-  var p = (get-paths)
+fn activate { |&dir=$nil &p=$nil|
+  if (eq $p $nil) {
+    set p = (get-paths &dir=$dir)
+  }
+  fail-if-no-module $p
+
   if (not (is-allowed $p)) {
-    fail $p[module]' is blocked. Run `direlv:allow` to approve its content'
-  }
+    echo >&2 $p[module]' is blocked. Run `direlv:allow` to approve its content'
+  } elif (has-key $exports $p[hash]) {
+    echo >&2 $p[module]' is already activated'
+  } else {
+    set activation-stack = (conj [$p[dir]] $@activation-stack)
 
-  if (has-key $exports $p[hash]) {
-    fail $p[module]' is already activated'
+    eval &on-end={ |ns|
+      var exported-names = (keys $ns[export] | put [(all)])
+      echo >&2 'loading: '(str:join ' ' $exported-names)' for '$p[module]
+      edit:add-vars $ns[export]
+      set exports = (assoc $exports $p[hash] $exported-names)
+    } (slurp <./activate.elv)
   }
-
-  eval &on-end={ |ns|
-    var exported-names = (keys $ns[export] | put [(all)])
-    echo >&2 'loading: '(str:join ' ' $exported-names)
-    edit:add-vars $ns[export]
-    set exports = (assoc $exports $p[hash] $exported-names)
-  } (slurp <./activate.elv)
 }
 
 # deactivate and (TODO) restore the most recently overwritten variables
-fn deactivate {
-  var p = (get-paths)
+fn deactivate { |&dir=$nil|
+  var p = (get-paths &dir=$dir)
+  fail-if-no-module $p
 
   if (not (has-key $exports $p[hash])) {
     fail $p[module]' is not activated'
   }
 
-  edit:del-vars $exports[$p[hash]]
+  if (not-eq $activation-stack[0] $p[dir]) {
+    fail $p[module]' is not top of the activation stack'
+  }
+
+  set activation-stack = $activation-stack[1..]
+
+  var exported-names = $exports[$p[hash]]
+  echo >&2 'unloading: '(str:join ' ' $exported-names)' for '$p[module]
+  edit:del-vars $exported-names
   set exports = (dissoc $exports $p[hash])
+}
+
+fn is-ancestor { |ancestor descendant|
+  str:has-prefix (str:trim-suffix $descendant '/')'/' (str:trim-suffix $ancestor '/')'/'
+}
+
+fn activate-after-ancestors { |dir|
+  if (or (== (count $activation-stack) 0) (not-eq $activation-stack[0] $dir)) {
+    var parent = (path:dir $dir)
+    if (not-eq $parent $dir) {
+      activate-after-ancestors $parent
+    }
+
+    var p = (get-paths &dir=$dir)
+    if (has-key $p module) {
+      activate &p=$p
+    }
+  }
+}
+
+# check and trigger activation if required
+fn handle-cwd {
+  var pwd = (pwd)
+
+  if (not-eq $cwd $pwd) {
+    set cwd = $pwd
+
+    # deactivation, children before parents
+    while (and (> (count $activation-stack) 0) (not (is-ancestor $activation-stack[0] $cwd))) {
+      deactivate &dir=$activation-stack[0]
+    }
+
+    # activation, parents before children
+    # TODO optimise this by not looking further than we need, according to what changed in cwd
+    activate-after-ancestors $cwd
+  }
 }
