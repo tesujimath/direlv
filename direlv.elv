@@ -2,6 +2,10 @@ use os
 use path
 use str
 
+# we should be preserving previous values of REPL variables so that deactivate can restore them,
+# but I don't think that's possible with the current Elvish edit API
+var exports = [&]
+
 # emit hook suitable for inclusion in rc.elv
 fn hook {
   echo '## hook for direlv
@@ -20,10 +24,6 @@ fn canonical { |path|
 
 fn hash { |path|
   str:fields (echo $path | sha256sum) | take 1
-}
-
-fn hash-abbrev { |hash|
-  put $hash[..7]
 }
 
 fn get-or-create-allow-dir {
@@ -51,10 +51,9 @@ fn get-paths { |&dir=$nil|
 
   var canonical-module-path = (canonical $module-path)
   var canonical-module-path-hash = (hash $canonical-module-path)
-  var namespace = (hash-abbrev $canonical-module-path-hash)
   var allow-path = (path:join (get-or-create-allow-dir) $canonical-module-path-hash)
 
-  put [&module=$canonical-module-path &allow=$allow-path &namespace=$namespace]
+  put [&module=$canonical-module-path &allow=$allow-path &hash=$canonical-module-path-hash]
 }
 
 
@@ -91,7 +90,20 @@ fn activate {
   }
 
   eval &on-end={ |ns|
-    echo >&2 'loading: '(keys $ns[export] | str:join ' ')
+    var exported-names = (keys $ns[export] | put [(all)])
+    echo >&2 'loading: '(str:join ' ' $exported-names)
     edit:add-vars $ns[export]
+    set exports = (assoc $exports $p[hash] $exported-names)
   } (slurp <./activate.elv)
+}
+
+fn deactivate {
+  var p = (get-paths)
+
+  if (not (has-key $exports $p[hash])) {
+    fail $p[module]' is not activated'
+  }
+
+  edit:del-vars $exports[$p[hash]]
+  set exports = (dissoc $exports $p[hash])
 }
