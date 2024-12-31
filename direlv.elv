@@ -2,9 +2,13 @@ use os
 use path
 use str
 
-# we should be preserving previous values of REPL variables so that deactivate can restore them,
-# but I don't think that's possible with the current Elvish edit API
+# preserved state for restoring on deactivation
+
+# indexed by hash of activation
 var exports = [&]
+
+# indexed by variable name (TODO)
+var activation-stack = [&]
 
 # emit hook suitable for inclusion in rc.elv
 fn hook {
@@ -89,6 +93,10 @@ fn activate {
     fail $p[module]' is blocked. Run `direlv:allow` to approve its content'
   }
 
+  if (has-key $exports $p[hash]) {
+    fail $p[module]' is already activated'
+  }
+
   eval &on-end={ |ns|
     var exported-names = (keys $ns[export] | put [(all)])
     echo >&2 'loading: '(str:join ' ' $exported-names)
@@ -97,6 +105,7 @@ fn activate {
   } (slurp <./activate.elv)
 }
 
+# deactivate and (TODO) restore the most recently overwritten variables
 fn deactivate {
   var p = (get-paths)
 
