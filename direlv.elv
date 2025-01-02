@@ -2,13 +2,8 @@ use os
 use path
 use str
 
-# preserved state for restoring on deactivation
-
-# indexed by hash of activation
-var _exports = [&]
-
-# list of slash-terminated directories in reverse activation order (children before parents)
-var _activation-stack = []
+# in order of activation, most recent at the head
+var _dir-stack = []
 
 fn _get-context { |&dir=$nil|
   fn hash { |path|
@@ -50,14 +45,13 @@ fn _get-context { |&dir=$nil|
   }
 }
 
-fn _fail-if-no-module { |cx|
+fn _fail-if-missing { |cx|
   if (not (has-key $cx module)) {
     fail 'direlv: error '(path:base $cx[module-base])' not found in '$cx[dir]
   }
 }
 
 fn activate { |&dir=$nil &cx=$nil|
-  # is `cx` allowed, defaulting to current directory
   fn is-allowed { |cx|
     put (os:exists $cx[allow])
   }
@@ -65,43 +59,51 @@ fn activate { |&dir=$nil &cx=$nil|
   if (eq $cx $nil) {
     set cx = (_get-context &dir=$dir)
   }
-  _fail-if-no-module $cx
+  _fail-if-missing $cx
 
   if (not (is-allowed $cx)) {
     echo >&2 $cx[module]' is blocked. Run `direlv:allow` to approve its content'
-  } elif (has-key $_exports $cx[hash]) {
-    echo >&2 $cx[module]' is already activated'
   } else {
-    set _activation-stack = (conj [$cx[dir]] $@_activation-stack)
-
     eval &on-end={ |ns|
       var exported-names = (keys $ns[export] | put [(all)])
       echo >&2 'loading: '(str:join ' ' $exported-names)' for '$cx[module]
       edit:add-vars $ns[export]
-      set _exports = (assoc $_exports $cx[hash] $exported-names)
+      set _dir-stack = (conj [[&dir=$cx[dir] &exports=$ns[export]]] $@_dir-stack)
     } (slurp <$cx[module])
   }
 }
 
-# deactivate and (TODO) restore the most recently overwritten variables
+# deactivate and restore the most recently overwritten variables
 fn deactivate { |&dir=$nil|
   var cx = (_get-context &dir=$dir)
-  _fail-if-no-module $cx
+  _fail-if-missing $cx
 
-  if (not (has-key $_exports $cx[hash])) {
-    fail $cx[module]' is not activated'
+  # get the names to deactivate
+  var deactivating = [&]
+  keep-if { |a| ==s $a[dir] $cx[dir] } $_dir-stack |
+    each { |a| keys $a[exports] } |
+    each { |name| set deactivating[$name] = $true }
+
+  # determine what is still active
+  set _dir-stack = (keep-if { |a| !=s $a[dir] $cx[dir] } $_dir-stack | put [(all)])
+
+  # reinstate what was overridden
+  for a $_dir-stack {
+    var reinstating = (keys $deactivating | keep-if { |name| has-key $a[exports] $name } | put [(all)])
+    if (> (count $reinstating) 0) {
+      echo >&2 'reinstating: '(str:join ' ' $reinstating)' for '$a[dir]
+      for name $reinstating {
+        edit:add-var $name $a[exports][$name]
+
+        del deactivating[$name]
+      }
+    }
   }
 
-  if (not-eq $_activation-stack[0] $cx[dir]) {
-    fail $cx[module]' is not top of the activation stack'
-  }
-
-  set _activation-stack = $_activation-stack[1..]
-
-  var exported-names = $_exports[$cx[hash]]
-  echo >&2 'unloading: '(str:join ' ' $exported-names)' for '$cx[module]
-  edit:del-vars $exported-names
-  set _exports = (dissoc $_exports $cx[hash])
+  # remove whatever didn't get reinstated
+  var remaining-names = (keys $deactivating | put [(all)])
+  echo >&2 'unloading: '(str:join ' ' $remaining-names)' for '$cx[module]
+  edit:del-vars $remaining-names
 }
 
 fn _is-ancestor { |ancestor descendant|
@@ -109,7 +111,7 @@ fn _is-ancestor { |ancestor descendant|
 }
 
 fn _activate-after-ancestors { |dir|
-  if (or (== (count $_activation-stack) 0) (not-eq $_activation-stack[0] $dir)) {
+  if (or (== (count $_dir-stack) 0) (not-eq $_dir-stack[0][dir] $dir)) {
     var parent = (path:dir $dir)
     if (not-eq $parent $dir) {
       _activate-after-ancestors $parent
@@ -123,8 +125,8 @@ fn _activate-after-ancestors { |dir|
 }
 
 fn _deactivate-descendants { |dir|
-  while (and (> (count $_activation-stack) 0) (_is-ancestor $dir $_activation-stack[0])) {
-    deactivate &dir=$_activation-stack[0]
+  while (and (> (count $_dir-stack) 0) (_is-ancestor $dir $_dir-stack[0][dir])) {
+    deactivate &dir=$_dir-stack[0][dir]
   }
 }
 
@@ -138,8 +140,8 @@ fn handle-cwd {
     set _handled-cwd = $pwd
 
     # deactivation, children before parents
-    while (and (> (count $_activation-stack) 0) (not (_is-ancestor $_activation-stack[0] $pwd))) {
-      deactivate &dir=$_activation-stack[0]
+    while (and (> (count $_dir-stack) 0) (not (_is-ancestor $_dir-stack[0][dir] $pwd))) {
+      deactivate &dir=$_dir-stack[0][dir]
     }
 
     # activation, parents before children
@@ -151,7 +153,7 @@ fn handle-cwd {
 # allow `dir`, defaulting to current directory
 fn allow { |&dir=$nil|
   var cx = (_get-context &dir=$dir)
-  _fail-if-no-module $cx
+  _fail-if-missing $cx
 
   echo $cx[module] >$cx[allow]
 
@@ -164,7 +166,7 @@ fn allow { |&dir=$nil|
 # revoke `dir`, defaulting to current directory
 fn revoke { |&dir=$nil|
   var cx = (_get-context &dir=$dir)
-  _fail-if-no-module $cx
+  _fail-if-missing $cx
 
   # allow-path not existing is harmless
   try {
