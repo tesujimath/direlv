@@ -50,7 +50,7 @@ var tests = [
 
   [&d=a &f={
     cd (path:join $testdir 'a')
-    _direlv:allow
+    _direlv:allow $edit-ns:
     _direlv:handle-cwd $edit-ns:
 
     assert-expected (run-state-fns) [
@@ -62,7 +62,7 @@ var tests = [
 
   [&d=nested &f={
     cd (path:join $testdir 'a' 'nested')
-    _direlv:allow
+    _direlv:allow $edit-ns:
     _direlv:handle-cwd $edit-ns:
 
     assert-expected (run-state-fns) [
@@ -86,7 +86,7 @@ var tests = [
 
   [&d=b&f={
     cd (path:join $testdir 'b')
-    _direlv:allow
+    _direlv:allow $edit-ns:
     _direlv:handle-cwd $edit-ns:
 
     assert-expected (run-state-fns) [
@@ -112,11 +112,33 @@ var tests = [
     cd $testdir
     _direlv:handle-cwd $edit-ns:
 
-    _direlv:revoke &dir=a
+    _direlv:revoke &dir=a $edit-ns:
     cd a
     _direlv:handle-cwd $edit-ns:
 
     assert-expected (run-state-fns) [&]
+  }]
+
+  [&d=allow-parent-a &f={
+    cd (path:join $testdir 'a' 'nested')
+    _direlv:handle-cwd $edit-ns:
+
+    assert-expected (run-state-fns) [
+      # &say-hello-a~='Hello uniquely activated world A'
+      &say-hello~='Hello activated nested world'
+      &say-hello-nested~='Hello uniquely activated nested world'
+      &say-goodbye~='Goodbye cruel activated nested world'
+    ]
+
+    _direlv:allow &dir=.. $edit-ns:
+    _direlv:handle-cwd $edit-ns:
+
+    assert-expected (run-state-fns) [
+      &say-hello-a~='Hello uniquely activated world A'
+      &say-hello~='Hello activated nested world'
+      &say-hello-nested~='Hello uniquely activated nested world'
+      &say-goodbye~='Goodbye cruel activated nested world'
+    ]
   }]
 ]
 

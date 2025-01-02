@@ -13,11 +13,11 @@ fn handle-cwd {
 }
 
 fn allow { |&dir=$nil|
-  _direlv:allow &dir=$dir
+  _direlv:allow &dir=$dir $edit:
 }
 
 fn revoke { |&dir=$nil|
-  _direlv:revoke &dir=$dir
+  _direlv:revoke &dir=$dir $edit:
 }
 
 # emit hook suitable for inclusion in rc.elv

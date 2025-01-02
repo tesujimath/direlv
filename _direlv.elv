@@ -126,9 +126,9 @@ fn _activate-after-ancestors { |dir edit-ns:|
   }
 }
 
-fn _deactivate-descendants { |dir|
+fn _deactivate-descendants { |dir edit-ns:|
   while (and (> (count $_dir-stack) 0) (_is-ancestor $dir $_dir-stack[0][dir])) {
-    deactivate &dir=$_dir-stack[0][dir]
+    deactivate &dir=$_dir-stack[0][dir] $edit-ns:
   }
 }
 
@@ -153,20 +153,20 @@ fn handle-cwd { |edit-ns:|
 }
 
 # allow `dir`, defaulting to current directory
-fn allow { |&dir=$nil|
+fn allow { |&dir=$nil edit-ns:|
   var cx = (_get-context &dir=$dir)
   _fail-if-missing $cx
 
   echo $cx[module] >$cx[allow]
 
   # parents must always be activated before children, for overrides, so ...
-  _deactivate-descendants $cx[dir]
+  _deactivate-descendants $cx[dir] $edit-ns:
 
   set _handled-cwd = $nil
 }
 
 # revoke `dir`, defaulting to current directory
-fn revoke { |&dir=$nil|
+fn revoke { |&dir=$nil edit-ns:|
   var cx = (_get-context &dir=$dir)
   _fail-if-missing $cx
 
@@ -178,4 +178,6 @@ fn revoke { |&dir=$nil|
       fail $e
     }
   }
+
+  set _handled-cwd = $nil
 }
