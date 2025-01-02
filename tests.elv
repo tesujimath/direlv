@@ -1,5 +1,6 @@
 #!/usr/bin/env elvish
 
+use os
 use path
 
 use github.com/tesujimath/elvish-tap/tap
@@ -24,8 +25,10 @@ fn del-vars { |v|
 
 var edit-ns: = (ns [&add-vars~=$add-vars~ &del-vars~=$del-vars~])
 
-
 var testdir = (path:join (pwd) 'tests')
+var xdg-data-home = (path:join $testdir 'XDG_DATA_HOME')
+set-env XDG_DATA_HOME $xdg-data-home
+os:remove-all $xdg-data-home
 
 # run all the functions we have accumumlated in state and collect their output
 fn run-state-fns {
@@ -38,8 +41,16 @@ fn run-state-fns {
 }
 
 var tests = [
+  [&d=blocked-a &f={
+    cd (path:join $testdir 'a')
+    _direlv:handle-cwd $edit-ns:
+
+    assert-expected (run-state-fns) [&]
+  }]
+
   [&d=a &f={
     cd (path:join $testdir 'a')
+    _direlv:allow
     _direlv:handle-cwd $edit-ns:
 
     assert-expected (run-state-fns) [
@@ -51,6 +62,7 @@ var tests = [
 
   [&d=nested &f={
     cd (path:join $testdir 'a' 'nested')
+    _direlv:allow
     _direlv:handle-cwd $edit-ns:
 
     assert-expected (run-state-fns) [
@@ -74,6 +86,7 @@ var tests = [
 
   [&d=b&f={
     cd (path:join $testdir 'b')
+    _direlv:allow
     _direlv:handle-cwd $edit-ns:
 
     assert-expected (run-state-fns) [
@@ -93,6 +106,17 @@ var tests = [
       &say-hello-nested~='Hello uniquely activated nested world'
       &say-goodbye~='Goodbye cruel activated nested world'
     ]
+  }]
+
+  [&d=revoke-a &f={
+    cd $testdir
+    _direlv:handle-cwd $edit-ns:
+
+    _direlv:revoke &dir=a
+    cd a
+    _direlv:handle-cwd $edit-ns:
+
+    assert-expected (run-state-fns) [&]
   }]
 ]
 
