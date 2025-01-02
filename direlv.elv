@@ -10,8 +10,6 @@ var exports = [&]
 # list of slash-terminated directories in reverse activation order (children before parents)
 var activation-stack = []
 
-var cwd
-
 # emit hook suitable for inclusion in rc.elv
 fn hook {
   echo '## hook for direlv
@@ -75,29 +73,6 @@ fn is-allowed { |cx|
   put (os:exists $cx[allow])
 }
 
-# allow `dir`, defaulting to current directory
-fn allow { |&dir=$nil|
-  var cx = (get-context &dir=$dir)
-  fail-if-no-module $cx
-
-  echo $cx[module] >$cx[allow]
-}
-
-# revoke `dir`, defaulting to current directory
-fn revoke { |&dir=$nil|
-  var cx = (get-context &dir=$dir)
-  fail-if-no-module $cx
-
-  # allow-path not existing is harmless
-  try {
-    os:remove $cx[allow]
-  } catch e {
-    if (not-eq $e os:-is-not-exist) {
-      fail $e
-    }
-  }
-}
-
 fn activate { |&dir=$nil &cx=$nil|
   if (eq $cx $nil) {
     set cx = (get-context &dir=$dir)
@@ -159,20 +134,57 @@ fn activate-after-ancestors { |dir|
   }
 }
 
+fn _deactivate-descendants { |dir|
+  while (and (> (count $activation-stack) 0) (is-ancestor $dir $activation-stack[0])) {
+    deactivate &dir=$activation-stack[0]
+  }
+}
+
 # check and trigger activation if required
+var handled-cwd
+
 fn handle-cwd {
   var pwd = (pwd)
 
-  if (not-eq $cwd $pwd) {
-    set cwd = $pwd
+  if (not-eq $handled-cwd $pwd) {
+    set handled-cwd = $pwd
 
     # deactivation, children before parents
-    while (and (> (count $activation-stack) 0) (not (is-ancestor $activation-stack[0] $cwd))) {
+    while (and (> (count $activation-stack) 0) (not (is-ancestor $activation-stack[0] $pwd))) {
       deactivate &dir=$activation-stack[0]
     }
 
     # activation, parents before children
     # TODO optimise this by not looking further than we need, according to what changed in cwd
-    activate-after-ancestors $cwd
+    activate-after-ancestors $pwd
   }
 }
+
+# allow `dir`, defaulting to current directory
+fn allow { |&dir=$nil|
+  var cx = (get-context &dir=$dir)
+  fail-if-no-module $cx
+
+  echo $cx[module] >$cx[allow]
+
+  # parents must always be activated before children, for overrides, so ...
+  _deactivate-descendants $cx[dir]
+
+  set handled-cwd = $nil
+}
+
+# revoke `dir`, defaulting to current directory
+fn revoke { |&dir=$nil|
+  var cx = (get-context &dir=$dir)
+  fail-if-no-module $cx
+
+  # allow-path not existing is harmless
+  try {
+    os:remove $cx[allow]
+  } catch e {
+    if (not-eq $e os:-is-not-exist) {
+      fail $e
+    }
+  }
+}
+
