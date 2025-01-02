@@ -49,29 +49,30 @@ fn get-or-create-allow-dir {
 }
 
 fn get-context { |&dir=$nil|
-  var module-path = (path:join (or $dir '.') 'activate.elv')
+  var module-base = 'dir.elv'
+  var module-path = (path:join (or $dir '.') $module-base)
 
   if (not (os:exists $module-path)) {
-    put [&dir=(or $dir '.')]
+    put [&dir=(or $dir '.') &module-base=$module-base]
   } else {
     var canonical-module-path = (canonical $module-path)
     var canonical-module-path-hash = (hash $canonical-module-path)
     var canonical-module-dir = (path:dir $canonical-module-path)
     var allow-path = (path:join (get-or-create-allow-dir) $canonical-module-path-hash)
 
-    put [&dir=$canonical-module-dir &module=$canonical-module-path &allow=$allow-path &hash=$canonical-module-path-hash]
+    put [&dir=$canonical-module-dir &module-base=$module-base &module=$canonical-module-path &allow=$allow-path &hash=$canonical-module-path-hash]
   }
 }
 
-fn fail-if-no-module { |p|
-  if (not (has-key $p module)) {
-    fail 'direlv: error activate.elv not found in '$p[dir]
+fn fail-if-no-module { |cx|
+  if (not (has-key $cx module)) {
+    fail 'direlv: error '(path:base $cx[module-base])' not found in '$cx[dir]
   }
 }
 
-# is `p` allowed, defaulting to current directory
-fn is-allowed { |p|
-  put (os:exists $p[allow])
+# is `cx` allowed, defaulting to current directory
+fn is-allowed { |cx|
+  put (os:exists $cx[allow])
 }
 
 # allow `dir`, defaulting to current directory
@@ -115,7 +116,7 @@ fn activate { |&dir=$nil &cx=$nil|
       echo >&2 'loading: '(str:join ' ' $exported-names)' for '$cx[module]
       edit:add-vars $ns[export]
       set exports = (assoc $exports $cx[hash] $exported-names)
-    } (slurp <./activate.elv)
+    } (slurp <$cx[module])
   }
 }
 
