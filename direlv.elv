@@ -89,14 +89,16 @@ fn deactivate { |&dir=$nil|
 
   # reinstate what was overridden
   for a $_dir-stack {
-    var reinstating = (keys $deactivating | keep-if { |name| has-key $a[exports] $name } | put [(all)])
-    if (> (count $reinstating) 0) {
-      echo >&2 'reinstating: '(str:join ' ' $reinstating)' for '$a[dir]
-      for name $reinstating {
-        edit:add-var $name $a[exports][$name]
-
+    var reinstating = [&]
+    keys $deactivating | each { |name|
+      if (has-key $a[exports] $name) {
+        set reinstating[$name] = $a[exports][$name]
         del deactivating[$name]
       }
+    }
+    if (> (count $reinstating) 0) {
+      echo >&2 'reinstating: '(str:join ' ' (keys $reinstating | put [(all)]))' for '$a[dir]
+      edit:add-vars $reinstating
     }
   }
 
