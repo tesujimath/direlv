@@ -1,26 +1,18 @@
 {
-  description = "Nix developer and CI tooling for bash-env-elvish";
+  description = "Nix developer and CI tooling for direlv";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
     flake-utils.url = "github:numtide/flake-utils";
-
-    bash-env-json = {
-      url = "github:tesujimath/bash-env-json/main";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
   };
 
-  outputs = { nixpkgs, flake-utils, bash-env-json, ... }:
+  outputs = { nixpkgs, flake-utils, ... }:
     flake-utils.lib.eachDefaultSystem
       (system:
         let
           pkgs = import nixpkgs {
             inherit system;
-          };
-          flakePkgs = {
-            bash-env-json = bash-env-json.packages.${system}.default;
           };
         in
         {
@@ -31,7 +23,6 @@
                 [
                   elvish
                   yq
-                  flakePkgs.bash-env-json
                 ];
             in
             {
