@@ -25,11 +25,9 @@ fn hook {
   echo '## hook for direlv
 set @edit:before-readline = $@edit:before-readline {
   try {
+    direlv:handle-cwd
   } catch e {
     echo $e
   }
+}'
 }
-'
-}
-
-
