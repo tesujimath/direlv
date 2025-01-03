@@ -27,7 +27,7 @@ Install the latest version of the package using epm.
 ## Usage
 
 Activation is triggered in directories containing a file `dir.elv` which have been authorised using `direlv:allow`.
-The symbols loaded into the REPL are those defined by the map `export` defined in `dir.elv`.
+The symbols loaded into the REPL are those defined by the map `export` defined in `dir.elv`, as in this [example](tests/a/dir.elv).
 
 For automatic directory activation and deactivation, simply install the hook like this:
 

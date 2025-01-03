@@ -6,10 +6,10 @@ fn say-hello-a {
   echo 'Hello uniquely activated world A'
 }
 
-# this currently doesn't work:
+# this currently doesn't work because the namespace is not available in the REPL:
 # fn say-hello2 {
 #   echo 'Hello again activated world A'
-#   private-hello
+#   say-private-hello
 # }
 
 fn say-goodbye {
