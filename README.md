@@ -45,27 +45,31 @@ Then, e.g.
 ```
 > cd tests
 > cd a
-/home/sjg/vc/tesujimath/direlv/tests/a/dir.elv is blocked. Run `direlv:allow` to approve its content
+direlv: warning ~/vc/tesujimath/direlv/tests/a is blocked. Run `direlv:allow` to approve its content
 > direlv:allow
-loading: say-goodbye~ say-hello~ say-hello-a~ for /home/sjg/vc/tesujimath/direlv/tests/a/dir.elv
+direlv: loading ~/vc/tesujimath/direlv/tests/a
+direlv: export say-goodbye~ say-hello~ say-hello-a~
 > say-hello
 Hello activated world A
 
 > cd nested/
-/home/sjg/vc/tesujimath/direlv/tests/a/nested/dir.elv is blocked. Run `direlv:allow` to approve its content
+direlv: warning ~/vc/tesujimath/direlv/tests/a/nested is blocked. Run `direlv:allow` to approve its content
 > direlv:allow
-loading: say-hello-nested~ say-goodbye~ say-hello~ for /home/sjg/vc/tesujimath/direlv/tests/a/nested/dir.elv
+direlv: loading ~/vc/tesujimath/direlv/tests/a/nested
+direlv: export say-hello-nested~ say-goodbye~ say-hello~
 > say-hello
 Hello activated nested world
 
 > cd ..
-reinstating: say-goodbye~ say-hello~ for /home/sjg/vc/tesujimath/direlv/tests/a
-unloading: say-hello-nested~ for /home/sjg/vc/tesujimath/direlv/tests/a/nested/dir.elv
+direlv: unloading ~/vc/tesujimath/direlv/tests/a/nested
+direlv: reinstate say-goodbye~ say-hello~ for ~/vc/tesujimath/direlv/tests/a
+direlv: unexport say-hello-nested~
 > say-hello
 Hello activated world A
 
 > cd ..
-unloading: say-goodbye~ say-hello~ say-hello-a~ for /home/sjg/vc/tesujimath/direlv/tests/a/dir.elv
+direlv: unloading ~/vc/tesujimath/direlv/tests/a
+direlv: unexport say-goodbye~ say-hello~ say-hello-a~
 > say-hello
 Exception: exec: "say-hello": executable file not found in $PATH
   [tty 37]:1:1-9: say-hello
@@ -76,13 +80,15 @@ Directories can be removed for approval using `direlv:revoke`.
 Manual activation and deactivation is also possible, although this is not the main use case.
 
 ```
-aya> direlv:activate &dir=tests/a
-loading: say-goodbye~ say-hello~ say-hello-a~ for /home/sjg/vc/tesujimath/direlv/tests/a/dir.elv
-aya> say-hello
+> direlv:activate &dir=tests/a
+direlv: loading ~/vc/tesujimath/direlv/tests/a
+direlv: export say-goodbye~ say-hello~ say-hello-a~
+> say-hello
 Hello activated world A
-aya> direlv:deactivate &dir=tests/a
-unloading: say-goodbye~ say-hello~ say-hello-a~ for /home/sjg/vc/tesujimath/direlv/tests/a/dir.elv
-aya> say-hello
+> direlv:deactivate &dir=tests/a
+direlv: unloading ~/vc/tesujimath/direlv/tests/a
+direlv: unexport say-goodbye~ say-hello~ say-hello-a~
+> say-hello
 Exception: exec: "say-hello": executable file not found in $PATH
   [tty 43]:1:1-9: say-hello
 ```

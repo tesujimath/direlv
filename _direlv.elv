@@ -51,6 +51,14 @@ fn _fail-if-missing { |cx|
   }
 }
 
+fn _beautify-path { |path|
+  if (and (has-env HOME) (str:has-prefix $path $E:HOME)) {
+    put '~'(str:trim-prefix $path $E:HOME)
+  } else {
+    put $path
+  }
+}
+
 fn activate { |&dir=$nil &cx=$nil edit-ns:|
   fn is-allowed { |cx|
     put (os:exists $cx[allow])
@@ -62,16 +70,17 @@ fn activate { |&dir=$nil &cx=$nil edit-ns:|
   _fail-if-missing $cx
 
   if (not (is-allowed $cx)) {
-    echo >&2 $cx[module]' is blocked. Run `direlv:allow` to approve its content'
+    echo >&2 'direlv: warning '(_beautify-path $cx[dir])' is blocked. Run `direlv:allow` to approve its content'
   } else {
+    echo >&2 'direlv: loading '(_beautify-path $cx[dir])
     eval &on-end={ |ns|
       if (has-key $ns export) {
         var exported-names = (keys $ns[export] | put [(all)])
-        echo >&2 'loading: '(str:join ' ' $exported-names)' for '$cx[module]
+        echo >&2 'direlv: export '(str:join ' ' $exported-names)
         $edit-ns:add-vars~ $ns[export]
         set _dir-stack = (conj [[&dir=$cx[dir] &exports=$ns[export]]] $@_dir-stack)
       } else {
-        echo >&2 'warning: export not defined for '$cx[module]', nothing loaded'
+        echo >&2 'direlv: warning export not defined'
       }
     } (slurp <$cx[module])
   }
@@ -81,6 +90,8 @@ fn activate { |&dir=$nil &cx=$nil edit-ns:|
 fn deactivate { |&dir=$nil edit-ns:|
   var cx = (_get-context &dir=$dir)
   _fail-if-missing $cx
+
+  echo >&2 'direlv: unloading '(_beautify-path $cx[dir])
 
   # get the names to deactivate
   var deactivating = [&]
@@ -101,14 +112,14 @@ fn deactivate { |&dir=$nil edit-ns:|
       }
     }
     if (> (count $reinstating) 0) {
-      echo >&2 'reinstating: '(str:join ' ' (keys $reinstating | put [(all)]))' for '$a[dir]
+      echo >&2 'direlv: reinstate '(str:join ' ' (keys $reinstating | put [(all)]))' for '(_beautify-path $a[dir])
       $edit-ns:add-vars~ $reinstating
     }
   }
 
   # remove whatever didn't get reinstated
   var remaining-names = (keys $deactivating | put [(all)])
-  echo >&2 'unloading: '(str:join ' ' $remaining-names)' for '$cx[module]
+  echo >&2 'direlv: unexport '(str:join ' ' $remaining-names)
   $edit-ns:del-vars~ $remaining-names
 }
 
