@@ -65,10 +65,14 @@ fn activate { |&dir=$nil &cx=$nil edit-ns:|
     echo >&2 $cx[module]' is blocked. Run `direlv:allow` to approve its content'
   } else {
     eval &on-end={ |ns|
-      var exported-names = (keys $ns[export] | put [(all)])
-      echo >&2 'loading: '(str:join ' ' $exported-names)' for '$cx[module]
-      $edit-ns:add-vars~ $ns[export]
-      set _dir-stack = (conj [[&dir=$cx[dir] &exports=$ns[export]]] $@_dir-stack)
+      if (has-key $ns export) {
+        var exported-names = (keys $ns[export] | put [(all)])
+        echo >&2 'loading: '(str:join ' ' $exported-names)' for '$cx[module]
+        $edit-ns:add-vars~ $ns[export]
+        set _dir-stack = (conj [[&dir=$cx[dir] &exports=$ns[export]]] $@_dir-stack)
+      } else {
+        echo >&2 'warning: export not defined for '$cx[module]', nothing loaded'
+      }
     } (slurp <$cx[module])
   }
 }
